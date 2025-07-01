@@ -7,13 +7,13 @@ export async function getConsolidatedContact(email?: string, phoneNumber?: strin
     const supabase = getSupabaseClient();
 
     try {
-        // Query contacts with matching email or phoneNumber
+        // Query contacts with matching email or phonenumber
         const { data: contacts, error } = await supabase
-            .from('Contact')
-            .select('id, phoneNumber, email, linkedId, linkPrecedence, createdAt')
-            .or(`email.eq.${email || ''},phoneNumber.eq.${phoneNumber || ''}`)
-            .is('deletedAt', null)
-            .order('createdAt', { ascending: true });
+            .from('contact')
+            .select('id, phonenumber, email, linkedid, linkprecedence, createdat')
+            .or(`email.eq.${email || ''},phonenumber.eq.${phoneNumber || ''}`)
+            .is('deletedat', null)
+            .order('createdat', { ascending: true });
 
         if (error) {
             logger.error('Supabase query error', { error });
@@ -23,13 +23,13 @@ export async function getConsolidatedContact(email?: string, phoneNumber?: strin
         // No matches: create new primary contact
         if (!contacts || contacts.length === 0) {
             const { data: newContact, error: createError } = await supabase
-                .from('Contact')
+                .from('contact')
                 .insert({
                     email,
-                    phoneNumber,
-                    linkPrecedence: 'primary',
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
+                    phonenumber: phoneNumber,
+                    linkprecedence: 'primary',
+                    createdat: new Date(),
+                    updatedat: new Date(),
                 })
                 .select()
                 .single();
@@ -44,7 +44,7 @@ export async function getConsolidatedContact(email?: string, phoneNumber?: strin
                 contact: {
                     primaryContatctId: newContact.id,
                     emails: newContact.email ? [newContact.email] : [],
-                    phoneNumbers: newContact.phoneNumber ? [newContact.phoneNumber] : [],
+                    phoneNumbers: newContact.phonenumber ? [newContact.phonenumber] : [],
                     secondaryContactIds: [],
                 },
             };
@@ -55,20 +55,20 @@ export async function getConsolidatedContact(email?: string, phoneNumber?: strin
 
         // Check for new information
         const hasNewEmail = email && !contacts.some((c) => c.email === email);
-        const hasNewPhone = phoneNumber && !contacts.some((c) => c.phoneNumber === phoneNumber);
+        const hasNewPhone = phoneNumber && !contacts.some((c) => c.phonenumber === phoneNumber);
 
         // Create secondary contact if new info
         let newContact: Contact | null = null;
         if (hasNewEmail || hasNewPhone) {
             const { data, error: createError } = await supabase
-                .from('Contact')
+                .from('contact')
                 .insert({
                     email,
-                    phoneNumber,
-                    linkedId: primaryContact.id,
-                    linkPrecedence: 'secondary',
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
+                    phonenumber: phoneNumber,
+                    linkedid: primaryContact.id,
+                    linkprecedence: 'secondary',
+                    createdat: new Date(),
+                    updatedat: new Date(),
                 })
                 .select()
                 .single();
@@ -88,14 +88,14 @@ export async function getConsolidatedContact(email?: string, phoneNumber?: strin
         if (contacts.length > 1) {
             const secondaryIds = contacts.slice(1).map((c) => c.id);
             const { error: updateError } = await supabase
-                .from('Contact')
+                .from('contact')
                 .update({
-                    linkPrecedence: 'secondary',
-                    linkedId: primaryContact.id,
-                    updatedAt: new Date(),
+                    linkprecedence: 'secondary',
+                    linkedid: primaryContact.id,
+                    updatedat: new Date(),
                 })
                 .in('id', secondaryIds)
-                .eq('linkPrecedence', 'primary');
+                .eq('linkprecedence', 'primary');
 
             if (updateError) {
                 logger.error('Supabase update primaries error', { error: updateError });
@@ -106,11 +106,11 @@ export async function getConsolidatedContact(email?: string, phoneNumber?: strin
 
         // Fetch all related contacts
         const { data: relatedContacts, error: fetchError } = await supabase
-            .from('Contact')
-            .select('id, email, phoneNumber, linkPrecedence')
-            .or(`id.eq.${primaryContact.id},linkedId.eq.${primaryContact.id}`)
-            .is('deletedAt', null)
-            .order('createdAt', { ascending: true });
+            .from('contact')
+            .select('id, email, phonenumber, linkprecedence')
+            .or(`id.eq.${primaryContact.id},linkedid.eq.${primaryContact.id}`)
+            .is('deletedat', null)
+            .order('createdat', { ascending: true });
 
         if (fetchError) {
             logger.error('Supabase fetch related contacts error', { error: fetchError });
@@ -119,16 +119,16 @@ export async function getConsolidatedContact(email?: string, phoneNumber?: strin
 
         // Build response
         const emails = Array.from(new Set(relatedContacts.map((c) => c.email).filter(Boolean)));
-        const phoneNumbers = Array.from(new Set(relatedContacts.map((c) => c.phoneNumber).filter(Boolean)));
-        const secondaryContactIds = relatedContacts.filter((c) => c.linkPrecedence === 'secondary').map((c) => c.id);
+        const phoneNumbers = Array.from(new Set(relatedContacts.map((c) => c.phonenumber).filter(Boolean)));
+        const secondaryContactIds = relatedContacts.filter((c) => c.linkprecedence === 'secondary').map((c) => c.id);
 
         return {
             contact: {
                 primaryContatctId: primaryContact.id,
                 emails: [primaryContact.email, ...emails.filter((e) => e !== primaryContact.email)].filter(Boolean),
                 phoneNumbers: [
-                    primaryContact.phoneNumber,
-                    ...phoneNumbers.filter((p) => p !== primaryContact.phoneNumber),
+                    primaryContact.phonenumber,
+                    ...phoneNumbers.filter((p) => p !== primaryContact.phonenumber),
                 ].filter(Boolean),
                 secondaryContactIds,
             },
