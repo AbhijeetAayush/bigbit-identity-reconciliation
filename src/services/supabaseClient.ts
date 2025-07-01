@@ -10,7 +10,9 @@ export function getSupabaseClient(): SupabaseClient {
         const key = process.env.SUPABASE_KEY;
 
         if (!url || !key) {
-            logger.error('Supabase credentials missing');
+            logger.error(
+                'Supabase credentials missing; ensure SUPABASE_URL and SUPABASE_KEY are set during deployment',
+            );
             throw new DatabaseError('Supabase credentials not configured');
         }
 

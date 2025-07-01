@@ -10,7 +10,9 @@ export function getRedisClient(): Redis {
         const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
         if (!url || !token) {
-            logger.error('Upstash Redis credentials missing');
+            logger.error(
+                'Upstash Redis credentials missing; ensure UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are set during deployment',
+            );
             throw new CacheError('Upstash Redis credentials not configured');
         }
 

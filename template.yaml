@@ -1,178 +1,114 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  bitespeed-identity-reconciliation
-
-  SAM Template for Bitespeed Identity Reconciliation Service
+Description: SAM Template for Bitespeed Identity Reconciliation Service
 
 Parameters:
-  SupabaseUrl:
-    Type: String
-    Description: Supabase project URL
-    NoEcho: true
-  SupabaseKey:
-    Type: String
-    Description: Supabase API key
-    NoEcho: true
-  UpstashRedisRestUrl:
-    Type: String
-    Description: Upstash Redis REST API URL
-    NoEcho: true
-  UpstashRedisRestToken:
-    Type: String
-    Description: Upstash Redis REST API token
-    NoEcho: true
-  KmsKeyArn:
-    Type: String
-    Description: ARN of KMS key for encrypting environment variables
+    SupabaseUrl:
+        Type: String
+        Description: Supabase project URL
+        NoEcho: true
+    SupabaseKey:
+        Type: String
+        Description: Supabase API key
+        NoEcho: true
+    UpstashRedisRestUrl:
+        Type: String
+        Description: Upstash Redis REST API URL
+        NoEcho: true
+    UpstashRedisRestToken:
+        Type: String
+        Description: Upstash Redis REST API token
+        NoEcho: true
+    KmsKeyArn:
+        Type: String
+        Description: ARN of KMS key for encrypting environment variables
 
 Globals:
-  Function:
-    Timeout: 15
-    MemorySize: 256
-    LoggingConfig:
-      LogFormat: JSON
-    Architectures:
-      - x86_64
-    Runtime: nodejs22.x
+    Function:
+        Timeout: 15
+        MemorySize: 256
+        LoggingConfig:
+            LogFormat: JSON
+        Architectures:
+            - x86_64
+        Runtime: nodejs22.x
 
 Resources:
-  IdentityAPI:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: BitespeedIdentityAPI
-      StageName: Prod
-      Cors: "'*'"
-      DefinitionBody:
-        openapi: 3.0.0
-        info:
-          title: Bitespeed Identity Reconciliation API
-          description: API for reconciling customer identities across purchases.
-          version: 1.0.0
-        paths:
-          /identify:
-            post:
-              summary: Identify and reconcile customer contact
-              description: Links customer contacts based on email or phone number, returning a consolidated contact.
-              tags:
-                - Identity Reconciliation
-              requestBody:
-                required: true
-                content:
-                  application/json:
-                    schema:
-                      $ref: '#/components/schemas/IdentifyRequest'
-              responses:
-                '200':
-                  description: Successfully reconciled contact
-                  content:
-                    application/json:
-                      schema:
-                        $ref: '#/components/schemas/IdentifyResponse'
-                '400':
-                  description: Invalid request data
-                  content:
-                    application/json:
-                      schema:
-                        $ref: '#/components/schemas/Error'
-                '500':
-                  description: Internal server error
-                  content:
-                    application/json:
-                      schema:
-                        $ref: '#/components/schemas/Error'
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IdentifyFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-        components:
-          schemas:
-            IdentifyRequest:
-              type: object
-              properties:
-                email:
-                  type: string
-                  example: "mcfly@hillvalley.edu"
-                phoneNumber:
-                  type: string
-                  example: "123456"
-              atLeastOneOf: ["email", "phoneNumber"]
-            IdentifyResponse:
-              type: object
-              required:
-                - contact
-              properties:
-                contact:
-                  type: object
-                  required:
-                    - primaryContatctId
-                    - emails
-                    - phoneNumbers
-                    - secondaryContactIds
-                  properties:
-                    primaryContatctId:
-                      type: integer
-                      example: 1
-                    emails:
-                      type: array
-                      items:
-                        type: string
-                      example: ["lorraine@hillvalley.edu", "mcfly@hillvalley.edu"]
-                    phoneNumbers:
-                      type: array
-                      items:
-                        type: string
-                      example: ["123456"]
-                    secondaryContactIds:
-                      type: array
-                      items:
-                        type: integer
-                      example: [23]
-            Error:
-              type: object
-              properties:
-                error:
-                  type: string
-                  example: "Either email or phoneNumber is required"
+    RestApiRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: apigateway.amazonaws.com
+                      Action: sts:AssumeRole
+            Policies:
+                - PolicyName: InvokeLambdaPolicy
+                  PolicyDocument:
+                      Version: '2012-10-17'
+                      Statement:
+                          - Effect: Allow
+                            Action:
+                                - lambda:InvokeFunction
+                            Resource:
+                                - !GetAtt IdentifyFunction.Arn
 
-  IdentifyFunction:
-    Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2020
-        Sourcemap: true
-        EntryPoints:
-          - app.ts
-    Properties:
-      CodeUri: src/identify/
-      Handler: app.handler
-      Environment:
-        Variables:
-          SUPABASE_URL: !Ref SupabaseUrl
-          SUPABASE_KEY: !Ref SupabaseKey
-          UPSTASH_REDIS_REST_URL: !Ref UpstashRedisRestUrl
-          UPSTASH_REDIS_REST_TOKEN: !Ref UpstashRedisRestToken
-      KmsKeyArn: !Ref KmsKeyArn
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: "*"
-            - Effect: Allow
-              Action:
-                - kms:Decrypt
-              Resource: !Ref KmsKeyArn
-      Events:
-        Identify:
-          Type: Api
-          Properties:
-            Path: /identify
-            Method: POST
-            RestApiId: !Ref IdentityAPI
-            Auth:
-              Authorizer: NONE
+    IdentityAPI:
+        Type: AWS::Serverless::Api
+        Properties:
+            StageName: Prod
+            DefinitionBody:
+                Fn::Transform:
+                    Name: AWS::Include
+                    Parameters:
+                        Location: ./api/backend-api.yaml
+
+    IdentifyFunction:
+        Type: AWS::Serverless::Function
+        Metadata:
+            BuildMethod: esbuild
+            BuildProperties:
+                Minify: true
+                Target: es2020
+                Sourcemap: true
+                EntryPoints:
+                    - app.ts
+        Properties:
+            CodeUri: src/identify/
+            Handler: app.handler
+            Environment:
+                Variables:
+                    SUPABASE_URL: !Ref SupabaseUrl
+                    SUPABASE_KEY: !Ref SupabaseKey
+                    UPSTASH_REDIS_REST_URL: !Ref UpstashRedisRestUrl
+                    UPSTASH_REDIS_REST_TOKEN: !Ref UpstashRedisRestToken
+            KmsKeyArn: !Ref KmsKeyArn
+            Policies:
+                - Statement:
+                      - Effect: Allow
+                        Action:
+                            - logs:CreateLogGroup
+                            - logs:CreateLogStream
+                            - logs:PutLogEvents
+                        Resource: '*'
+                      - Effect: Allow
+                        Action:
+                            - kms:Decrypt
+                        Resource: !Ref KmsKeyArn
+            Events:
+                Identify:
+                    Type: Api
+                    Properties:
+                        Path: /identify
+                        Method: POST
+                        RestApiId: !Ref IdentityAPI
+
+Outputs:
+    IdentityApi:
+        Description: URL of the API Gateway
+        Value: !Sub 'https://${IdentityAPI}.execute-api.${AWS::Region}.amazonaws.com/Prod/'
+    IdentifyFunctionArn:
+        Description: ARN of the Identify Lambda Function
+        Value: !GetAtt IdentifyFunction.Arn

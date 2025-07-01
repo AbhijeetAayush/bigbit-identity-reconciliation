@@ -79,7 +79,9 @@ export async function getConsolidatedContact(email?: string, phoneNumber?: strin
             }
 
             newContact = data;
-            logger.info('Created secondary contact', { id: newContact.id });
+            if (newContact) {
+                logger.info('Created secondary contact', { id: newContact.id });
+            }
         }
 
         // Reconcile multiple primaries
