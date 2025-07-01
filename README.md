@@ -1,3 +1,9 @@
+# 🛠️ API Endpoints for Testing
+
+**Base URL:**
+`https://hlidc410o7.execute-api.us-east-1.amazonaws.com/Prod/identify`
+
+
 # 🚀 Bitespeed Identity Reconciliation Service
 
 Welcome to the **Bitespeed Identity Reconciliation Service!** 🎉
